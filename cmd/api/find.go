@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+
+	actors "github.com/kerosiinikone/go-actors-project/internal"
 )
 
 type Request struct {
@@ -12,7 +14,7 @@ type Request struct {
 	EmailAddr 	string `json:"email,omitempty"`
 }
 
-func (app *application) handleFindJob(w http.ResponseWriter, r *http.Request) {
+func (app *Application) handleFindJob(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		return
 	}
@@ -20,11 +22,20 @@ func (app *application) handleFindJob(w http.ResponseWriter, r *http.Request) {
 	var input Request
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		app.logger.Fatal(err)
+		app.Logger.Fatal(err)
 	}
 
-	// Send an acknowledgement as a response
+	// Validate the response !!!
+
 	// Send an internal message to the Manager
+	actors.HandleNewJobRequest()
+	
 	// Start the scraping process 
 	// Send an email to the addr after scraping
+	
+	// Send an acknowledgement as a response
+	writeJSON(w, map[string]bool{
+		"success": true,
+	}, 201)
+
 }
