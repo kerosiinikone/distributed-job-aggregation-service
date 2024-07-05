@@ -6,11 +6,10 @@ import (
 	"github.com/anthdm/hollywood/actor"
 )
 
-type JobRequest struct {
-	Profession  string `json:"profession,omitempty"`
-	JobTitle    string `json:"jobTitle,omitempty"`
-	CompanyName string `json:"companyName,omitempty"`
-	EmailAddr   string `json:"email,omitempty"`
+var jobSites = []string{
+	"https://tyopaikat.oikotie.fi/tyopaikat",
+	"https://www.jobly.fi/tyopaikat",
+	"https://duunitori.fi/tyopaikat",
 }
 
 type JobResult struct {
@@ -38,16 +37,23 @@ func (m *Manager) Receive(ctx *actor.Context) {
 		// Started
 	case *JobRequest:
 		log.Println("New message to Manager")
-		m.findJobService(msg)
+		m.findJobService(ctx, msg)
 	case *JobResult:
 		log.Println("New message from Actor")
 	}
 } 
 
-func (m *Manager) findJobService(job *JobRequest) {
-	// Fetch the list of job listing sites
-	// Spawn 1-2 worker nodes / actors on each site
+// Link fetching can be done once the sercver is up, not on every request !!!
+
+func (m *Manager) findJobService(ctx *actor.Context, meta *JobRequest) error {
+	// Spawn a worker node / actor on each site
+	for _, l := range jobSites {
+		pid := ctx.SpawnChild(NewActor(l, ctx.PID(), meta), "actor-"+l)
+		m.NodeMap[pid] = true
+	}
+
 	// The actors will perform the business logic / scraping and send a list of links
 	// After receiving the list, the manager kills the actor
+	return nil
 }
 

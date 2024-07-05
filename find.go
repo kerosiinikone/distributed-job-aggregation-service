@@ -5,6 +5,11 @@ import (
 	"net/http"
 )
 
+type JobRequest struct {
+	Keywords  string `json:"keywords"`
+	EmailAddr   string `json:"email,omitempty"`
+	Location	string `json:"location,omitempty"`
+}
 
 func (app *Application) findJobHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

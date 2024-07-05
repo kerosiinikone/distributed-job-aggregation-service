@@ -2,7 +2,10 @@ module github.com/kerosiinikone/go-actors-project
 
 go 1.22.3
 
-require github.com/anthdm/hollywood v0.0.0-20240623113250-46e66804eb19
+require (
+	github.com/anthdm/hollywood v0.0.0-20240623113250-46e66804eb19
+	golang.org/x/net v0.17.0
+)
 
 require (
 	github.com/DataDog/gostackparse v0.7.0 // indirect

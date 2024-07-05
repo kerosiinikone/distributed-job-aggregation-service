@@ -11,6 +11,7 @@ func (app *Application) errorResponse(w http.ResponseWriter, errMsg string, stat
 	}{
 		Error: errMsg,
 	}
+	// fmt.Errorf for making errors
 	app.Logger.Printf("Error: %s\n", errMsg)
 	writeJSON(w, errorMsg, statusCode)
 }
