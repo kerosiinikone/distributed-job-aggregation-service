@@ -5,6 +5,17 @@ import (
 	"net/http"
 )
 
+func (app *Application) errorResponse(w http.ResponseWriter, errMsg string, statusCode int) {
+	errorMsg := struct{
+		Error string		
+	}{
+		Error: errMsg,
+	}
+	app.Logger.Printf("Error: %s\n", errMsg)
+	writeJSON(w, errorMsg, statusCode)
+}
+
+
 func writeJSON(w http.ResponseWriter, data interface{}, statusCode int) error {
 	w.WriteHeader(statusCode)
 	w.Header().Add("Content-Type", "application/json")
