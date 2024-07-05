@@ -17,8 +17,8 @@ type Actor struct {
 }
 
 type JobPosting struct {
-	Text       string
-	Link        string
+	Text      []string
+	Link      string
 }
 
 func NewActor(link string, mpid *actor.PID, meta *JobRequest) actor.Producer {
@@ -41,7 +41,7 @@ func (a *Actor) Receive(ctx *actor.Context) {
 		if err != nil {
 			log.Println(err)
 		} 
-		log.Println(postings)
+		log.Println(postings, "postings")
 		ctx.Engine().Poison(ctx.PID())
 	}
 }
@@ -60,14 +60,14 @@ func jobListingLinkMatcher(val string) bool {
 }
 
 func jobListingKeywordMatcher(val string) bool {
-	return true
+	return len(val) > 0
 }
 
 // Needs to be able to access the next page of jobs on a listing site
 // Initial checks based on listing title and description 
 func (a *Actor) extractJobListings(link string) ([]JobPosting, error) {
 	var (
-		f func(*html.Node)
+		f func(*html.Node, *JobPosting)
 		postings []JobPosting
 	)
 
@@ -86,38 +86,25 @@ func (a *Actor) extractJobListings(link string) ([]JobPosting, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	f = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "div" {
-			var text, link string
-			
-			// Link can be a children of the heading anchor ??
+	f = func(n *html.Node, jp *JobPosting) {
+		if n.Type == html.ElementNode && n.Data == "article" {
+			jp = &JobPosting{} 
 			for c := n.FirstChild; c != nil; c = c.NextSibling {
-				if c.Type == html.ElementNode {
-					if c.Data == "a" {
-						for _, a := range c.Attr {
-							if a.Key == "href" && jobListingLinkMatcher(a.Val) {
-								link = a.Val
-								break
-							}
-						}
-					}
-					if (c.Data == "h2" || c.Data == "h3") && c.FirstChild != nil && jobListingKeywordMatcher(c.FirstChild.Data) {
-						text = strings.TrimSpace(c.FirstChild.Data)
-					}
-				}
+				f(c, jp)
 			}
-			log.Println()
-			if text != "" && link != "" {
-				postings = append(postings, JobPosting{Link: link, Text: text})
+			postings = append(postings, JobPosting{Text: jp.Text})
+		} else if n.Type == html.TextNode && jp != nil {
+			text := strings.TrimSpace(n.Data)
+			if text != "" {
+				jp.Text = append(jp.Text, text)
 			}
-		}
-
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			f(c)
+		} else {
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				f(c, jp)
+			}
 		}
 	}
-	f(doc)
-
+	f(doc, nil) 
+	
 	return postings, nil
 }

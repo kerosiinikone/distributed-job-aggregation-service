@@ -7,9 +7,7 @@ import (
 )
 
 var jobSites = []string{
-	"https://tyopaikat.oikotie.fi/tyopaikat",
 	"https://www.jobly.fi/tyopaikat",
-	"https://duunitori.fi/tyopaikat",
 }
 
 type JobResult struct {
