@@ -11,14 +11,14 @@ import (
 )
 
 type Actor struct {
-	MPID *actor.PID
-	Link string
-	Meta *JobRequest
+	MPID 	*actor.PID
+	Link 	string
+	Meta 	*JobRequest
 }
 
 type JobPosting struct {
 	Text      []string
-	Link      string
+	Link      []string
 }
 
 func NewActor(link string, mpid *actor.PID, meta *JobRequest) actor.Producer {
@@ -47,24 +47,42 @@ func (a *Actor) Receive(ctx *actor.Context) {
 }
 
 // As long as there are related job postings, spawn new actors to dig deeper ??
+// Spawn new actors to check other pages ? -> later
 func (a *Actor) scrapeJobService() ([]JobPosting, error) {
-	postings, err := a.extractJobListings(a.Link)
-	if err != nil {
-		return []JobPosting{}, err
+	var allPostings []JobPosting 
+	for i := 0; i < 10; i++ {
+		postings, err := a.extractJobListings(a.Link + "?page=" + fmt.Sprintf("%d", i))
+		if err != nil {
+			return []JobPosting{}, err
+		}
+		allPostings = append(allPostings, postings...)
 	}
-	return postings, nil
+	
+	return allPostings, nil
 }
 
 func jobListingLinkMatcher(val string) bool {
 	return (strings.Contains(val, "/tyopaikka/") || strings.Contains(val, "/tyopaikat/tyo/") || strings.Contains(val, "/avoimet-tyopaikat/"))
 }
 
-func jobListingKeywordMatcher(val string) bool {
-	return len(val) > 0
+// Needs access to Meta object -> method instead of function
+func (a *Actor) jobListingKeywordMatcher(val string) bool {
+	var valid bool
+
+	if len(a.Meta.Keywords) == 0 {
+		return true
+	}
+	for _, k := range a.Meta.Keywords {
+		if strings.Contains(strings.ToLower(val), strings.ToLower(k)) {
+			valid = true
+		}
+	}
+	return valid
 }
 
 // Needs to be able to access the next page of jobs on a listing site
 // Initial checks based on listing title and description 
+// Refactor the logic later
 func (a *Actor) extractJobListings(link string) ([]JobPosting, error) {
 	var (
 		f func(*html.Node, *JobPosting)
@@ -86,25 +104,35 @@ func (a *Actor) extractJobListings(link string) ([]JobPosting, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	f = func(n *html.Node, jp *JobPosting) {
 		if n.Type == html.ElementNode && n.Data == "article" {
 			jp = &JobPosting{} 
 			for c := n.FirstChild; c != nil; c = c.NextSibling {
 				f(c, jp)
 			}
-			postings = append(postings, JobPosting{Text: jp.Text})
+			if len(jp.Text) != 0 && len(jp.Link) != 0 {
+				postings = append(postings, JobPosting{Text: jp.Text, Link: jp.Link})
+			}
 		} else if n.Type == html.TextNode && jp != nil {
 			text := strings.TrimSpace(n.Data)
-			if text != "" {
+			if text != "" && a.jobListingKeywordMatcher(text) {
 				jp.Text = append(jp.Text, text)
 			}
 		} else {
+			if n.Data == "a" && jp != nil {
+				for _, a := range n.Attr {
+					if a.Key == "href" && jobListingLinkMatcher(a.Val) {
+						jp.Link = append(jp.Link, a.Val)
+					}
+				}
+			}
 			for c := n.FirstChild; c != nil; c = c.NextSibling {
 				f(c, jp)
 			}
 		}
 	}
-	f(doc, nil) 
+	f(doc, nil)
 	
 	return postings, nil
 }
