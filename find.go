@@ -7,7 +7,7 @@ import (
 )
 
 type JobRequest struct {
-	Keywords  	[]string `json:"keywords"`
+	Keywords  	[]string `json:"keywords,omitempty"`
 	EmailAddr   string `json:"email,omitempty"`
 	Location	string `json:"location,omitempty"`
 }
@@ -28,7 +28,6 @@ func (app *Application) findJobHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate the response !!!
-
 	// Send an internal message to the Manager
 	err := app.handleNewJobRequest(&input)
 	if err != nil {
@@ -47,6 +46,5 @@ func (app *Application) handleNewJobRequest(input *JobRequest) error {
 	// Send Message to Manager
 	// Some additional logic / validation if necessary
 	app.Engine.Send(app.MPid, input)
-
 	return nil
 }

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"log"
-
 	"github.com/anthdm/hollywood/actor"
 )
 
@@ -11,20 +9,21 @@ var jobSites = []string{
 }
 
 type JobResult struct {
-	Links string
-	// ...
+	Link string
 }
 
-type nodeMap map[*actor.PID]bool
+type JobResults []JobResult
+
+type finderMap map[*actor.PID]bool
 
 type Manager struct {
-	NodeMap nodeMap
+	FinderMap finderMap
 }
 
 func NewManager() actor.Producer {
 	return func() actor.Receiver {
 		return &Manager{
-			NodeMap: make(nodeMap),
+			FinderMap: make(finderMap),
 		}
 	}
 }
@@ -34,22 +33,19 @@ func (m *Manager) Receive(ctx *actor.Context) {
 	case actor.Started:
 		// Started
 	case *JobRequest:
-		log.Println("New message to Manager")
 		m.findJobService(ctx, msg)
-	case *JobResult:
-		log.Println("New message from Actor")
+	case *JobResults:
+		// -> Continue
+		// Email service, etc
 	}
 } 
-
-// Link fetching can be done once the sercver is up, not on every request !!!
 
 func (m *Manager) findJobService(ctx *actor.Context, meta *JobRequest) error {
 	// Spawn a worker node / actor on each site
 	for _, l := range jobSites {
-		pid := ctx.SpawnChild(NewActor(l, ctx.PID(), meta), "actor-"+l)
-		m.NodeMap[pid] = true
+		pid := ctx.SpawnChild(NewFinder(l, ctx.PID(), meta), "finder-"+l)
+		m.FinderMap[pid] = true
 	}
-
 	// The actors will perform the business logic / scraping and send a list of links
 	// After receiving the list, the manager kills the actor
 	return nil
