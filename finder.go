@@ -5,12 +5,22 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/anthdm/hollywood/actor"
 	"golang.org/x/net/html"
 )
 
-// Why not stream every found job listing to the handleJobSites() and spawn new Visitors as new JobPostings arrive ???
+type visitorMap map[*actor.PID]bool
+
+type Finder struct {
+	timer 			*time.Timer
+	MPID 			*actor.PID
+	Link 			string
+	Results			JobResults
+	Meta 			*JobRequest
+	VisitorMap 		visitorMap
+}
 
 type KillVisitor struct {
 	PID *actor.PID
@@ -18,16 +28,6 @@ type KillVisitor struct {
 
 type FilteredJobPost struct {
 	Link string
-}
-
-type visitorMap map[*actor.PID]bool
-
-type Finder struct {
-	MPID 	*actor.PID
-	Link 	string
-	Results []JobResult // Can be a struct also
-	Meta 	*JobRequest
-	VisitorMap visitorMap
 }
 
 type JobPosting struct {
@@ -49,69 +49,63 @@ func NewFinder(link string, mpid *actor.PID, meta *JobRequest) actor.Producer {
 func (fi *Finder) Receive(ctx *actor.Context) {
 	switch msg := ctx.Message().(type) {
 	case *FilteredJobPost:
-		log.Println(msg.Link)
 		// Check whether any Visitors are still alive
 		// After that send the results to the Manager
 		// Kill the process
-		fi.handleResults(ctx, msg)
+		fi.handleResults(msg)
 	case *KillVisitor:
-		// After the Visitor has been poisoned, 
-		// remove from the VisitorMap
-		delete(fi.VisitorMap, msg.PID)
+		// Job done -> all spawned visitors have died
+		if fi.timer != nil {
+            fi.timer.Stop()
+        }
+		// Make the debounce time a global variable or part of config
+        fi.timer = time.AfterFunc(10*time.Second, func() {
+            results := fi.Results
+			ctx.Send(fi.MPID, &results)
+			ctx.Engine().Poison(ctx.PID())
+        })
 	case actor.Started:
 		// Perform the job
 		// Send the result back to Manager
-		
-		// Make into a goroutine
-		postings, err := fi.scrapeJobService()
-		if err != nil {
-			log.Fatalln(err)
-		} 
-		// Make into a goroutine
-		err = fi.handleJobSites(ctx, postings)
-		if err != nil {
-			log.Fatalln(err)
-		} 
+		jobChan := make(chan JobPosting)
+		doneCh := make(chan struct{})  
+
+		go fi.scrapeJobService(jobChan, doneCh)
+		go fi.handleJobSites(ctx, jobChan, doneCh)
 	}
 }
 
-func (fi *Finder) handleResults(ctx *actor.Context, job *FilteredJobPost) {
-	var results JobResults
-	
+func (fi *Finder) handleResults(job *FilteredJobPost) {
 	fi.Results = append(fi.Results, JobResult{
 		Link: job.Link,
 	})
-	if len(fi.VisitorMap) > 0 {
-		return
-	}
-	// Any cleanup necessary ???
-	results = fi.Results
-	ctx.Send(fi.MPID, &results)
-	ctx.Engine().Poison(ctx.PID())
 }
 
 // As long as there are related job postings, spawn new actors to dig deeper ??
-func (fi *Finder) scrapeJobService() ([]JobPosting, error) {
-	var allPostings []JobPosting 
+func (fi *Finder) scrapeJobService(jobCh chan JobPosting, doneCh chan struct{}) {
 	for i := 0; i < 10; i++ {
-		postings, err := fi.extractJobListings(fi.Link + "?page=" + fmt.Sprintf("%d", i))
-		if err != nil {
-			return []JobPosting{}, err
-		}
-		allPostings = append(allPostings, postings...)
+		go func() {
+			if err := fi.extractJobListings(fi.Link + "?page=" + fmt.Sprintf("%d", i), jobCh, doneCh); err != nil {
+				log.Fatalln(err)
+			}
+		}()
 	}
-	
-	return allPostings, nil
 }
 
 // Spawn Visitors (with link array on each)
 // Is concurrent and receives a single posting once it has been scraped through a channel
-func (fi *Finder) handleJobSites(ctx *actor.Context, postings []JobPosting) error {
-	for i, p := range postings {
-		pid := ctx.SpawnChild(NewVisitor(p.Link, ctx.PID(), fi.Meta), fmt.Sprintf("visitor-%d", i))
-		fi.VisitorMap[pid] = true
+func (fi *Finder) handleJobSites(ctx *actor.Context, in <-chan JobPosting, doneCh <-chan struct{}) {
+	var idx int
+	for {
+		select {
+		case job := <-in:
+			pid := ctx.SpawnChild(NewVisitor(job.Link, ctx.PID(), fi.Meta), fmt.Sprintf("visitor-%d", idx))
+			fi.VisitorMap[pid] = true
+			idx++
+		case <-doneCh:
+            return 
+        }
 	}
-	return nil
 }
 
 func jobListingLinkMatcher(val string) bool {
@@ -121,26 +115,25 @@ func jobListingLinkMatcher(val string) bool {
 // Needs to be able to access the next page of jobs on a listing site
 // Initial checks based on listing title and description 
 // Refactor the logic later
-func (fi *Finder) extractJobListings(link string) ([]JobPosting, error) {
+func (fi *Finder) extractJobListings(link string, out chan<- JobPosting, doneCh chan<- struct{}) error {
 	var (
 		f func(*html.Node, *JobPosting)
-		postings []JobPosting
 	)
 
 	res, err := http.Get(link)
 	if err != nil {
-		return []JobPosting{}, err
+		return err
 	}
 	
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status code error: %d %s", res.StatusCode, res.Status)
+		return fmt.Errorf("status code error: %d %s", res.StatusCode, res.Status)
 	}
 
 	doc, err := html.Parse(res.Body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	f = func(n *html.Node, jp *JobPosting) {
@@ -151,8 +144,7 @@ func (fi *Finder) extractJobListings(link string) ([]JobPosting, error) {
 			}
 			if len(jp.Text) != 0 && len(jp.Link) != 0 {
 				// Pipe to a channel that takes care of posting
-				// In that case, this function must be a goroutine
-				postings = append(postings, JobPosting{Text: jp.Text, Link: jp.Link})
+				out <- JobPosting{Text: jp.Text, Link: jp.Link}
 			}
 		} else if n.Type == html.TextNode && jp != nil {
 			text := strings.TrimSpace(n.Data)
@@ -175,6 +167,8 @@ func (fi *Finder) extractJobListings(link string) ([]JobPosting, error) {
 		}
 	}
 	f(doc, nil)
+
+	close(doneCh)
 	
-	return postings, nil
+	return nil
 }

@@ -41,10 +41,14 @@ func (m *Manager) Receive(ctx *actor.Context) {
 		m.CurrentRequest = msg
 		m.findJobService(ctx, msg)
 	case *JobResults:
-		// Refactor later ->
-		mailer := &EmailService{}
-		if err := mailer.SendEmail(msg, m.CurrentRequest); err != nil {
-			log.Fatalln(err)
+		// Refactor into a separate function later ->
+		if len(*msg) == 0 {
+			log.Println("No jobs found") // For now
+		} else {
+			mailer := &EmailService{}
+			if err := mailer.SendEmail(msg, m.CurrentRequest); err != nil {
+				log.Fatalln(err)
+			}
 		}
 		m.CurrentRequest = nil
 
