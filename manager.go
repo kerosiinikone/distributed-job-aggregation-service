@@ -1,12 +1,16 @@
 package main
 
 import (
+	"log"
+
 	"github.com/anthdm/hollywood/actor"
 )
 
-var jobSites = []string{
-	"https://www.jobly.fi/tyopaikat",
-}
+var (
+	jobSites = []string{
+		"https://www.jobly.fi/tyopaikat",
+	}
+)
 
 type JobResult struct {
 	Link string
@@ -17,6 +21,7 @@ type JobResults []JobResult
 type finderMap map[*actor.PID]bool
 
 type Manager struct {
+	CurrentRequest *JobRequest
 	FinderMap finderMap
 }
 
@@ -33,10 +38,16 @@ func (m *Manager) Receive(ctx *actor.Context) {
 	case actor.Started:
 		// Started
 	case *JobRequest:
+		m.CurrentRequest = msg
 		m.findJobService(ctx, msg)
 	case *JobResults:
-		// -> Continue
-		// Email service, etc
+		// Refactor later ->
+		mailer := &EmailService{}
+		if err := mailer.SendEmail(msg, m.CurrentRequest); err != nil {
+			log.Fatalln(err)
+		}
+		m.CurrentRequest = nil
+
 	}
 } 
 
@@ -50,4 +61,5 @@ func (m *Manager) findJobService(ctx *actor.Context, meta *JobRequest) error {
 	// After receiving the list, the manager kills the actor
 	return nil
 }
+
 

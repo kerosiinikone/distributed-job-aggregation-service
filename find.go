@@ -4,6 +4,11 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"regexp"
+)
+
+var (
+	EmailRegEx = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$") 
 )
 
 type JobRequest struct {
@@ -27,7 +32,11 @@ func (app *Application) findJobHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Validate the response !!!
+	if input.EmailAddr == "" || !EmailRegEx.Match([]byte(input.EmailAddr)) {
+		app.errorResponse(w, "Invalid Email Address")
+		return
+	}
+
 	// Send an internal message to the Manager
 	err := app.handleNewJobRequest(&input)
 	if err != nil {

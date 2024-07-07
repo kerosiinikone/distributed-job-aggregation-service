@@ -57,9 +57,20 @@ func (v *Visitor) jobListingKeywordMatcher(val string) bool {
 	return valid
 }
 
+// Needs access to Meta object -> method instead of function
+func (v *Visitor) jobListingLocationMatcher(val string) bool {
+	if v.Meta.Location == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(val), strings.ToLower(v.Meta.Location))
+}
+
 func (v *Visitor) filterJobPosting() bool {
+	// isLocation and isKeywordMatch are evaluated for the whole job article 
 	var (
-		f func(*html.Node) bool
+		f func(*html.Node)
+		isLocation bool
+		isKeywordMatch bool
 	)
 
 	res, err := http.Get(v.Link)
@@ -78,19 +89,38 @@ func (v *Visitor) filterJobPosting() bool {
 		return false
 	}
 
-	f = func(n *html.Node) bool {
-        if n.Type == html.TextNode {
-            if v.jobListingKeywordMatcher(strings.TrimSpace(n.Data)) {
-                return true
-            }
-        }
-        for c := n.FirstChild; c != nil; c = c.NextSibling {
-            if f(c) {
-                return true
-            }
-        }
-        return false
+	// Only check div.l-main
+	f = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "div" {
+			for _, a := range n.Attr {
+				if a.Key == "class" && a.Val == "l-main" {
+					for c := n.FirstChild; c != nil; c = c.NextSibling {
+						f(c)
+					}
+					if isKeywordMatch && isLocation {
+						return
+					}
+				}
+			}
+		} else if n.Type == html.TextNode {
+			text := strings.TrimSpace(n.Data)
+			if text != "" && v.jobListingKeywordMatcher(text) {
+				isKeywordMatch = true
+			}
+			if text != "" && v.jobListingLocationMatcher(text) {
+				isLocation = true
+			}
+		} else {
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				f(c)
+				if isKeywordMatch && isLocation {
+					return
+				}
+			}
+		}
     }
-	return f(doc)
+	f(doc)
+
+	return isLocation && isKeywordMatch
 }
 

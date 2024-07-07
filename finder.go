@@ -49,6 +49,7 @@ func NewFinder(link string, mpid *actor.PID, meta *JobRequest) actor.Producer {
 func (fi *Finder) Receive(ctx *actor.Context) {
 	switch msg := ctx.Message().(type) {
 	case *FilteredJobPost:
+		log.Println(msg.Link)
 		// Check whether any Visitors are still alive
 		// After that send the results to the Manager
 		// Kill the process
@@ -59,11 +60,14 @@ func (fi *Finder) Receive(ctx *actor.Context) {
 		delete(fi.VisitorMap, msg.PID)
 	case actor.Started:
 		// Perform the job
-		// Send the result back to Manager 
+		// Send the result back to Manager
+		
+		// Make into a goroutine
 		postings, err := fi.scrapeJobService()
 		if err != nil {
 			log.Fatalln(err)
 		} 
+		// Make into a goroutine
 		err = fi.handleJobSites(ctx, postings)
 		if err != nil {
 			log.Fatalln(err)
@@ -87,7 +91,6 @@ func (fi *Finder) handleResults(ctx *actor.Context, job *FilteredJobPost) {
 }
 
 // As long as there are related job postings, spawn new actors to dig deeper ??
-// Spawn new actors to check other pages ? -> later
 func (fi *Finder) scrapeJobService() ([]JobPosting, error) {
 	var allPostings []JobPosting 
 	for i := 0; i < 10; i++ {
@@ -102,6 +105,7 @@ func (fi *Finder) scrapeJobService() ([]JobPosting, error) {
 }
 
 // Spawn Visitors (with link array on each)
+// Is concurrent and receives a single posting once it has been scraped through a channel
 func (fi *Finder) handleJobSites(ctx *actor.Context, postings []JobPosting) error {
 	for i, p := range postings {
 		pid := ctx.SpawnChild(NewVisitor(p.Link, ctx.PID(), fi.Meta), fmt.Sprintf("visitor-%d", i))
@@ -146,6 +150,8 @@ func (fi *Finder) extractJobListings(link string) ([]JobPosting, error) {
 				f(c, jp)
 			}
 			if len(jp.Text) != 0 && len(jp.Link) != 0 {
+				// Pipe to a channel that takes care of posting
+				// In that case, this function must be a goroutine
 				postings = append(postings, JobPosting{Text: jp.Text, Link: jp.Link})
 			}
 		} else if n.Type == html.TextNode && jp != nil {
@@ -157,6 +163,7 @@ func (fi *Finder) extractJobListings(link string) ([]JobPosting, error) {
 			if n.Data == "a" && jp != nil {
 				for _, a := range n.Attr { 
 					// Don't add duplicate links !!!
+					// Assumes that a post "article" has only a single valid job link
 					if a.Key == "href" && jobListingLinkMatcher(a.Val) {
 						jp.Link = a.Val
 					}

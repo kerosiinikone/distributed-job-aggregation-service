@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/anthdm/hollywood/actor"
+	"github.com/joho/godotenv"
 )
 
 // EventStream ??
@@ -41,6 +42,11 @@ func NewApplication(cfg Config, logger *log.Logger, engine *actor.Engine, pid *a
 
 func main() {
 	var cfg Config
+
+	err := godotenv.Load(".env.local")
+	if err != nil {
+		log.Fatal("Error loading .env file")
+  	}
 	
 	flag.IntVar(&cfg.Port, "port", 3000, "listen port")
 	flag.IntVar(&cfg.MaxWorkers, "maxWorkers", 4, "number of workers max")
