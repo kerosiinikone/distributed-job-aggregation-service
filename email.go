@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -14,10 +13,9 @@ type Mailer interface {
 
 type EmailService struct{}
 
-// Pointer arguments ???
 func (e *EmailService) SendEmail(postings *JobResults, job *JobRequest) error {
 	d := newDialer()
-	m := newMessage(*postings, job.EmailAddr, strings.Join(job.Keywords[:], ", "))
+	m := newMessage(*postings, job.EmailAddr)
 
 	if err := d.DialAndSend(m); err != nil {
 		return err
@@ -35,7 +33,7 @@ func newDialer() gomail.Dialer {
 	)
 }
 
-func newMessage(postings JobResults, addr string, keyword string) *gomail.Message {
+func newMessage(postings JobResults, addr string) *gomail.Message {
 	postLinks := make([]string, len(postings))
 	for i, p := range postings {
 		postLinks[i] = p.Link
@@ -44,7 +42,7 @@ func newMessage(postings JobResults, addr string, keyword string) *gomail.Messag
 	m := gomail.NewMessage()
 	m.SetHeader("From", os.Getenv("EMAIL_ADDRESS"))
 	m.SetHeader("To", addr)
-	m.SetHeader("Subject", fmt.Sprintf("Job postings related to the keyword '%s'", keyword))
+	m.SetHeader("Subject", "Your job postings")
 	m.SetBody("text/html", strings.Join(postLinks[:], "\n\n"))
 
 	return m
