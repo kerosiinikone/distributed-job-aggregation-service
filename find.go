@@ -45,7 +45,7 @@ func (app *Application) findJobHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	// Send an acknowledgement as a response
-	writeJSON(w, map[string]bool{
+	app.writeJSON(w, map[string]bool{
 		"success": true,
 	})
 

@@ -13,17 +13,14 @@ func (app *Application) errorResponse(w http.ResponseWriter, errMsg string) {
 	}
 	// fmt.Errorf for making errors
 	app.Logger.Printf("Error: %s\n", errMsg)
-	writeJSON(w, errorMsg)
+	app.writeJSON(w, errorMsg)
 }
 
 
-func writeJSON(w http.ResponseWriter, data interface{}) error {
-	// w.WriteHeader(http.StatusInternalServerError) -> add status codes later
+func (app *Application) writeJSON(w http.ResponseWriter, data interface{}) {
 	w.Header().Add("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		// Send back error resp
-		return err
+		errMsg := []byte(err.Error())
+		w.Write(errMsg) // For now
 	}
-
-	return nil
 }

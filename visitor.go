@@ -11,7 +11,7 @@ import (
 // The Visitor takes a link and scrapes the job description, title and all the text nodes on the page.
 // If the body matches the atleast one of the provided keywords, the Visitor sends the webiste link back to
 // the Finder.
-type Visitor struct {
+type JoblyVisitor struct {
 	FPID *actor.PID
 	Link string
 	Meta *JobRequest
@@ -19,7 +19,7 @@ type Visitor struct {
 
 func NewVisitor(link string, mpid *actor.PID, meta *JobRequest) actor.Producer {
 	return func() actor.Receiver {
-		return &Visitor{
+		return &JoblyVisitor{
 			FPID: mpid,
 			Link: link,
 			Meta: meta,
@@ -27,7 +27,7 @@ func NewVisitor(link string, mpid *actor.PID, meta *JobRequest) actor.Producer {
 	}
 }
 
-func (v *Visitor) Receive(ctx *actor.Context) {
+func (v *JoblyVisitor) Receive(ctx *actor.Context) {
 	switch ctx.Message().(type) {
 	case actor.Started:
 		if v.filterJobPosting() {
@@ -44,7 +44,7 @@ func (v *Visitor) Receive(ctx *actor.Context) {
 }
 
 // Needs access to Meta object -> method instead of function
-func (v *Visitor) jobListingKeywordMatcher(val string) bool {
+func (v *JoblyVisitor) jobListingKeywordMatcher(val string) bool {
 	var valid bool
 	if len(v.Meta.Keywords) == 0 {
 		return true
@@ -58,14 +58,14 @@ func (v *Visitor) jobListingKeywordMatcher(val string) bool {
 }
 
 // Needs access to Meta object -> method instead of function
-func (v *Visitor) jobListingLocationMatcher(val string) bool {
+func (v *JoblyVisitor) jobListingLocationMatcher(val string) bool {
 	if v.Meta.Location == "" {
 		return true
 	}
 	return strings.Contains(strings.ToLower(val), strings.ToLower(v.Meta.Location))
 }
 
-func (v *Visitor) filterJobPosting() bool {
+func (v *JoblyVisitor) filterJobPosting() bool {
 	// isLocation and isKeywordMatch are evaluated for the whole job article 
 	var (
 		f func(*html.Node)
@@ -89,7 +89,7 @@ func (v *Visitor) filterJobPosting() bool {
 		return false
 	}
 
-	// Only check div.l-main
+	// Only check div.l-main -> joblyVisitor
 	f = func(n *html.Node) {
 		if n.Type == html.ElementNode && n.Data == "div" {
 			for _, a := range n.Attr {

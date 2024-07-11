@@ -41,7 +41,6 @@ func (m *Manager) Receive(ctx *actor.Context) {
 		m.CurrentRequest = msg
 		m.findJobService(ctx, msg)
 	case *JobResults:
-		// Refactor into a separate function later ->
 		if len(*msg) == 0 {
 			log.Println("No jobs found") // For now
 		} else {
@@ -58,7 +57,7 @@ func (m *Manager) Receive(ctx *actor.Context) {
 func (m *Manager) findJobService(ctx *actor.Context, meta *JobRequest) error {
 	// Spawn a worker node / actor on each site
 	for _, l := range jobSites {
-		pid := ctx.SpawnChild(NewFinder(l, ctx.PID(), meta), "finder-"+l)
+		pid := ctx.SpawnChild(NewJoblyFinder(l, ctx.PID(), meta), "finder-"+l)
 		m.FinderMap[pid] = true
 	}
 	// The actors will perform the business logic / scraping and send a list of links

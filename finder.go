@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,7 +14,12 @@ import (
 
 type visitorMap map[*actor.PID]bool
 
-type Finder struct {
+// type Finder interface {
+// 	extractJobListings(string, chan<- JobPosting, context.CancelFunc)
+// 	actor.Receiver
+// }
+
+type JoblyFinder struct {
 	timer 			*time.Timer
 	MPID 			*actor.PID
 	Link 			string
@@ -35,18 +41,18 @@ type JobPosting struct {
 	Link      string
 }
 
-func NewFinder(link string, mpid *actor.PID, meta *JobRequest) actor.Producer {
+func NewJoblyFinder(link string, mpid *actor.PID, meta *JobRequest) actor.Producer {
 	return func () actor.Receiver  {
-		return &Finder{
+		return &JoblyFinder{
 			MPID: mpid,
-			Link: link,
+			Link: link, // Only difference between job site finders
 			Meta: meta,
 			VisitorMap: make(visitorMap),
 		}
 	}
 }
 
-func (fi *Finder) Receive(ctx *actor.Context) {
+func (fi *JoblyFinder) Receive(ctx *actor.Context) {
 	switch msg := ctx.Message().(type) {
 	case *FilteredJobPost:
 		// Check whether any Visitors are still alive
@@ -67,25 +73,27 @@ func (fi *Finder) Receive(ctx *actor.Context) {
 	case actor.Started:
 		// Perform the job
 		// Send the result back to Manager
-		jobChan := make(chan JobPosting)
-		doneCh := make(chan struct{})  
 
-		go fi.scrapeJobService(jobChan, doneCh)
-		go fi.handleJobSites(ctx, jobChan, doneCh)
+		// Pull from config (time)
+		pCtx, cancel := context.WithTimeout(context.Background(), time.Second * 60)
+		jobChan := make(chan JobPosting) 
+
+		go fi.scrapeJobService(jobChan, cancel)
+		go fi.handleJobSites(ctx, jobChan, pCtx)
 	}
 }
 
-func (fi *Finder) handleResults(job *FilteredJobPost) {
+func (fi *JoblyFinder) handleResults(job *FilteredJobPost) {
 	fi.Results = append(fi.Results, JobResult{
 		Link: job.Link,
 	})
 }
 
 // As long as there are related job postings, spawn new actors to dig deeper ??
-func (fi *Finder) scrapeJobService(jobCh chan JobPosting, doneCh chan struct{}) {
+func (fi *JoblyFinder) scrapeJobService(jobCh chan JobPosting, cancel context.CancelFunc) {
 	for i := 0; i < 10; i++ {
 		go func() {
-			if err := fi.extractJobListings(fi.Link + "?page=" + fmt.Sprintf("%d", i), jobCh, doneCh); err != nil {
+			if err := fi.extractJobListings(fi.Link + "?page=" + fmt.Sprintf("%d", i), jobCh, cancel); err != nil {
 				log.Fatalln(err)
 			}
 		}()
@@ -94,7 +102,7 @@ func (fi *Finder) scrapeJobService(jobCh chan JobPosting, doneCh chan struct{}) 
 
 // Spawn Visitors (with link array on each)
 // Is concurrent and receives a single posting once it has been scraped through a channel
-func (fi *Finder) handleJobSites(ctx *actor.Context, in <-chan JobPosting, doneCh <-chan struct{}) {
+func (fi *JoblyFinder) handleJobSites(ctx *actor.Context, in <-chan JobPosting, pCtx context.Context) {
 	var idx int
 	for {
 		select {
@@ -102,7 +110,7 @@ func (fi *Finder) handleJobSites(ctx *actor.Context, in <-chan JobPosting, doneC
 			pid := ctx.SpawnChild(NewVisitor(job.Link, ctx.PID(), fi.Meta), fmt.Sprintf("visitor-%d", idx))
 			fi.VisitorMap[pid] = true
 			idx++
-		case <-doneCh:
+		case <-pCtx.Done():
             return 
         }
 	}
@@ -115,7 +123,7 @@ func jobListingLinkMatcher(val string) bool {
 // Needs to be able to access the next page of jobs on a listing site
 // Initial checks based on listing title and description 
 // Refactor the logic later
-func (fi *Finder) extractJobListings(link string, out chan<- JobPosting, doneCh chan<- struct{}) error {
+func (fi *JoblyFinder) extractJobListings(link string, out chan<- JobPosting, cancel context.CancelFunc) error {
 	var (
 		f func(*html.Node, *JobPosting)
 	)
@@ -168,7 +176,7 @@ func (fi *Finder) extractJobListings(link string, out chan<- JobPosting, doneCh 
 	}
 	f(doc, nil)
 
-	close(doneCh)
+	defer cancel()
 	
 	return nil
 }

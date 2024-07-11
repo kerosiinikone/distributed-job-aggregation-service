@@ -6,9 +6,11 @@ Cool (not finished)
 
 ### TODO
 
+- Documentation
+- Interface for extractJobListing to accommodate other job sites
+- Tests (duh)
+
+Consider these:
+
 - Reuse the same Manager, or spawn new per request ???
 - Poison the Manager after job done
-- Interface for extractJobListing to accommodate other job sites
-- Propagation with Context
-- Actor timeouts
-- Tests (duh)
