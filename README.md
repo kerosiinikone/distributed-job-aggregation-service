@@ -1,6 +1,6 @@
 # Distributed Job Scraper with Actors Model
 
-Cool (not finished)
+(documentation)
 
 ![jobscr](https://github.com/kerosiinikone/distributed-job-aggregation-service/assets/100020686/cde67059-5860-460a-a315-d6f8cfb32c89)
 

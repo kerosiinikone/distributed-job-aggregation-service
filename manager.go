@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"strings"
 
 	"github.com/anthdm/hollywood/actor"
 )
@@ -54,11 +55,14 @@ func (m *Manager) Receive(ctx *actor.Context) {
 	}
 } 
 
+// Search different jobSites
 func (m *Manager) findJobService(ctx *actor.Context, meta *JobRequest) error {
 	// Spawn a worker node / actor on each site
 	for _, l := range jobSites {
-		pid := ctx.SpawnChild(NewJoblyFinder(l, ctx.PID(), meta), "finder-"+l)
-		m.FinderMap[pid] = true
+		if strings.Contains(l, "jobly") {
+			pid := ctx.SpawnChild(NewJobActor(NewJoblyFinder(l), ctx.PID(), meta), "finder-"+l)
+			m.FinderMap[pid] = true
+		}
 	}
 	// The actors will perform the business logic / scraping and send a list of links
 	// After receiving the list, the manager kills the actor
