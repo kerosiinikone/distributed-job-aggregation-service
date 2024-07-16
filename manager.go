@@ -17,7 +17,10 @@ type JobResult struct {
 	Link string
 }
 
-type JobResults []JobResult
+type JobResults struct {
+	Results []JobResult
+	Error error
+}
 
 type finderMap map[*actor.PID]bool
 
@@ -42,7 +45,7 @@ func (m *Manager) Receive(ctx *actor.Context) {
 		m.CurrentRequest = msg
 		m.findJobService(ctx, msg)
 	case *JobResults:
-		if len(*msg) == 0 {
+		if len(msg.Results) == 0 {
 			log.Println("No jobs found") // For now
 		} else {
 			mailer := &EmailService{}
@@ -51,7 +54,6 @@ func (m *Manager) Receive(ctx *actor.Context) {
 			}
 		}
 		m.CurrentRequest = nil
-
 	}
 } 
 

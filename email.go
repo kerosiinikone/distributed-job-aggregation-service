@@ -34,8 +34,8 @@ func newDialer() gomail.Dialer {
 }
 
 func newMessage(postings JobResults, addr string) *gomail.Message {
-	postLinks := make([]string, len(postings))
-	for i, p := range postings {
+	postLinks := make([]string, len(postings.Results))
+	for i, p := range postings.Results {
 		postLinks[i] = p.Link
 	}
 

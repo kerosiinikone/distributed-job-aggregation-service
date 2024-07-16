@@ -7,8 +7,6 @@
 ### TODO
 
 - Documentation
-- Interface for extractJobListing to accommodate other job sites
-- Tests (duh)
 
 Consider these:
 

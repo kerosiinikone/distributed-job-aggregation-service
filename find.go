@@ -15,6 +15,7 @@ type JobRequest struct {
 	Keywords  	[]string `json:"keywords,omitempty"`
 	EmailAddr   string `json:"email,omitempty"`
 	Location	string `json:"location,omitempty"`
+	maxPages	int
 }
 
 func (app *Application) findJobHandler(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +37,9 @@ func (app *Application) findJobHandler(w http.ResponseWriter, r *http.Request) {
 		app.errorResponse(w, "Invalid Email Address")
 		return
 	}
+
+	// Why not allow actors to access the main app struct?
+	input.maxPages = app.Cfg.MaxPages
 
 	// Send an internal message to the Manager
 	err := app.handleNewJobRequest(&input)

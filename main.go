@@ -22,6 +22,7 @@ import (
 type Config struct {
 	Port       int
 	MaxWorkers int
+	MaxPages   int
 }
 
 type Application struct {
@@ -50,6 +51,7 @@ func main() {
 	
 	flag.IntVar(&cfg.Port, "port", 3000, "listen port")
 	flag.IntVar(&cfg.MaxWorkers, "maxWorkers", 4, "number of workers max")
+	flag.IntVar(&cfg.MaxPages, "maxPages", 5, "number of scraped pages")
 	flag.Parse()
 
 	logger := log.New(os.Stdout, "", log.Ldate | log.Ltime)

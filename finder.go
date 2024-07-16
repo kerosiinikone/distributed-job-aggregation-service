@@ -13,7 +13,8 @@ type visitorMap map[*actor.PID]bool
 
 type Finder interface {
 	extractJobListings(string, chan<- JobPosting, context.CancelFunc) error
-	scrapeJobService(chan JobPosting, context.CancelFunc)
+	// scrapeJobService(chan JobPosting, context.CancelFunc)
+	getLink() string
 }
 
 type jobActor struct {
@@ -55,7 +56,7 @@ func (a *jobActor) Receive(ctx *actor.Context) {
 		// Check whether any Visitors are still alive
 		// After that send the results to the Manager
 		// Kill the process
-		a.Results = append(a.Results, JobResult{
+		a.Results.Results = append(a.Results.Results, JobResult{
 			Link: msg.Link,
 		})
 	case *KillVisitor:
@@ -77,8 +78,19 @@ func (a *jobActor) Receive(ctx *actor.Context) {
 		pCtx, cancel := context.WithTimeout(context.Background(), time.Second * 60)
 		jobChan := make(chan JobPosting) 
 
-		go a.finder.scrapeJobService(jobChan, cancel)
+		go a.scrapeJobService(jobChan, cancel)
 		go a.handleJobSites(ctx, jobChan, pCtx)
+	}
+}
+
+// As long as there are related job postings, spawn new actors to dig deeper ??
+func (a *jobActor) scrapeJobService(jobCh chan JobPosting, cancel context.CancelFunc) {
+	for i := 0; i < a.Meta.maxPages; i++ {
+		go func() {
+			if err := a.finder.extractJobListings(a.finder.getLink() + "?page=" + fmt.Sprintf("%d", i), jobCh, cancel); err != nil {
+				a.Results.Error = err
+			}
+		}()
 	}
 }
 

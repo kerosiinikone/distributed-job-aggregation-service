@@ -3,3 +3,6 @@ build:
 
 run: build
 	./bin/main
+
+test-actors:
+	go test -timeout 300s -run ^TestActors$

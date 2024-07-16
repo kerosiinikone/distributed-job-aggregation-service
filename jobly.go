@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -20,15 +19,8 @@ func NewJoblyFinder(link string) Finder {
 	}
 }
 
-// As long as there are related job postings, spawn new actors to dig deeper ??
-func (fi *JoblyFinder) scrapeJobService(jobCh chan JobPosting, cancel context.CancelFunc) {
-	for i := 0; i < 10; i++ {
-		go func() {
-			if err := fi.extractJobListings(fi.Link + "?page=" + fmt.Sprintf("%d", i), jobCh, cancel); err != nil {
-				log.Fatalln(err)
-			}
-		}()
-	}
+func (fi *JoblyFinder) getLink() string {
+	return fi.Link
 }
 
 // Needs to be able to access the next page of jobs on a listing site
