@@ -61,9 +61,13 @@ func (m *Manager) Receive(ctx *actor.Context) {
 func (m *Manager) findJobService(ctx *actor.Context, meta *JobRequest) error {
 	// Spawn a worker node / actor on each site
 	for _, l := range jobSites {
-		if strings.Contains(l, "jobly") {
+		switch {
+		case strings.Contains(l, "jobly"):
 			pid := ctx.SpawnChild(NewJobActor(NewJoblyFinder(l), ctx.PID(), meta), "finder-"+l)
 			m.FinderMap[pid] = true
+		case strings.Contains(l, "duunitori"):
+			// Duunitori Finder
+		default:
 		}
 	}
 	// The actors will perform the business logic / scraping and send a list of links
